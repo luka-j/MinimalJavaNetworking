@@ -2,7 +2,7 @@ group 'rs.lukaj'
 version '0.2-alpha'
 
 apply plugin: 'java'
-apply plugin: 'java-library'
+apply plugin: 'library'
 
 sourceCompatibility = 1.7
 
