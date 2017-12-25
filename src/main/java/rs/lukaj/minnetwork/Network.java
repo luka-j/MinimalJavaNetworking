@@ -326,9 +326,13 @@ public class Network {
         @Override
         protected String getData(InputStream stream) throws IOException {
             BufferedReader reader      = new BufferedReader(new InputStreamReader(stream));
-            String         responseMsg = reader.readLine();
+            String line;
+            StringBuilder response = new StringBuilder();
+            while((line = reader.readLine()) != null) {
+                response.append(line).append('\n');
+            }
             reader.close();
-            return responseMsg;
+            return response.toString();
         }
 
         @Override
