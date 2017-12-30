@@ -38,7 +38,7 @@ import java.util.concurrent.*;
  * All methods allow chaining.
  * Created by luka on 4.8.17.
  */
-public class NetworkRequestBuilder<T> {
+public class NetworkRequestBuilder<Send, Receive> {
     private static final ExecutorService    executor    = Executors.newCachedThreadPool(); //executor for background execution of requests
 
     public static final Map<String, String> emptyMap    = Collections.emptyMap();
@@ -69,48 +69,53 @@ public class NetworkRequestBuilder<T> {
      * @param url url to which request will be made
      * @param verb should be one of {@link #VERB_GET}, {@link #VERB_POST}, {@link #VERB_PUT} or {@link #VERB_DELETE}
      * @param params string parameters to include with the request
-     * @return NetworkRequestBuilder which should be used to specify additional options
+     * @return NetworkRequestBuilder which should be used to specify additional options and execute the request
      */
-    public static NetworkRequestBuilder<String> create(URL url, String verb, Map<String, String> params) {
-        return new NetworkRequestBuilder<String>(url, verb).data(params);
+    public static NetworkRequestBuilder<String, String> create(URL url, String verb, Map<String, String> params) {
+        return new NetworkRequestBuilder<String, String>(url, verb).data(params);
     }
 
     /**
      * Creates the builder for given url and verb with no additional parameters nor receiving files.
      * @param url url to which request will be made
      * @param verb should be one of {@link #VERB_GET}, {@link #VERB_POST}, {@link #VERB_PUT} or {@link #VERB_DELETE}
-     * @return NetworkRequestBuilder which should be used to specify additional options
+     * @return NetworkRequestBuilder which should be used to specify additional options and execute the request
      */
-    public static NetworkRequestBuilder<String> create(URL url, String verb) {
+    public static NetworkRequestBuilder<String, String> create(URL url, String verb) {
         return create(url, verb, emptyMap);
     }
 
     /**
-     * Creates the builder for given url, verb and a file associated with it. If this is a GET
-     * request, data received from the server is saved into the passed File reference; otherwise,
-     * contents of the file are submitted to the server in the request body.
+     * Creates the builder for given url, verb and a file associated with it. This request will
+     * send a file and return a String.
      * @param url url to which request will be made
-     * @param verb should be {@link #VERB_GET} (for retrieving), or
-     *      {@link #VERB_POST}, {@link #VERB_PUT} or {@link #VERB_DELETE} (for sending)
-     * @param file File associated with the future request
-     * @return NetworkRequestBuilder which should be used to specify additional options
+     * @param verb should be one of {@link #VERB_GET}, {@link #VERB_POST}, {@link #VERB_PUT} or {@link #VERB_DELETE}
+     * @param file File which should be sent
+     * @return NetworkRequestBuilder which should be used to specify additional options and execute the request
      */
-    public static NetworkRequestBuilder<File> create(URL url, String verb, File file) {
-        return new NetworkRequestBuilder<File>(url, verb).file(file);
+    public static NetworkRequestBuilder<File, String> create(URL url, String verb, File file) {
+        return new NetworkRequestBuilder<File, String>(url, verb).file(file);
     }
 
-    private NetworkRequestBuilder<T> data() {
-        return data(emptyMap);
+    /**
+     * Creates the builder for given url, verb, file and additional params for request. This request
+     * will send urlencoded String map and return a File.
+     * @param url url to which the request will be made
+     * @param verb should be one of {@link #VERB_GET}, {@link #VERB_POST}, {@link #VERB_PUT} or {@link #VERB_DELETE}
+     * @param data parameters for request
+     * @param saveTo File to which to save the received data
+     * @return NetworkRequestBuilder which should be used to specify additional options and execute the request
+     */
+    public static NetworkRequestBuilder<String, File> create(URL url, String verb, Map<String, String> data, File saveTo) {
+        return new NetworkRequestBuilder<String, File>(url, verb).file(saveTo).data(data);
     }
 
-    private NetworkRequestBuilder<T> data(Map<String, String> data) {
-        if(file != null) throw new InvalidRequest("Cannot set both data and file");
+    private NetworkRequestBuilder<Send, Receive> data(Map<String, String> data) {
         this.data = data;
         return this;
     }
 
-    private NetworkRequestBuilder<T> file(File file) {
-        if(data != null) throw new InvalidRequest("Cannot set both data and file");
+    private NetworkRequestBuilder<Send, Receive> file(File file) {
         this.file = file;
         return this;
     }
@@ -119,7 +124,7 @@ public class NetworkRequestBuilder<T> {
      * Sets id for this request, which will be passed to {@link rs.lukaj.minnetwork.Network.NetworkCallbacks}.
      * Should be positive.
      */
-    public NetworkRequestBuilder<T> id(int id) {
+    public NetworkRequestBuilder<Send, Receive> id(int id) {
         this.requestId = id;
         return this;
     }
@@ -132,7 +137,7 @@ public class NetworkRequestBuilder<T> {
      * @param exceptionHandler handler used to handle possible errors
      * @return this
      */
-    public NetworkRequestBuilder<T> handler(NetworkExceptionHandler exceptionHandler) {
+    public NetworkRequestBuilder<Send, Receive> handler(NetworkExceptionHandler exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
         return this;
     }
@@ -141,7 +146,7 @@ public class NetworkRequestBuilder<T> {
      * Sets source for retrieving and potential changing of auth token.
      * If none is specified, no Authorization header is sent.
      */
-    public NetworkRequestBuilder<T> auth(AuthTokenManager tokens) {
+    public NetworkRequestBuilder<Send, Receive> auth(AuthTokenManager tokens) {
         this.tokens = tokens;
         return this;
     }
@@ -153,7 +158,7 @@ public class NetworkRequestBuilder<T> {
      * @param executor custom executor on which to execute this request
      * @return this
      */
-    public NetworkRequestBuilder<T> executor(ExecutorService executor) {
+    public NetworkRequestBuilder<Send, Receive> executor(ExecutorService executor) {
         this.executeOn = executor;
         return this;
     }
@@ -163,17 +168,17 @@ public class NetworkRequestBuilder<T> {
      * @param callbacks callbacks which should be notified
      */
     @SuppressWarnings("unchecked") //stupid generics
-    public void async(Network.NetworkCallbacks<T> callbacks) {
+    public void async(Network.NetworkCallbacks<Receive> callbacks) {
         if(data == null && file == null) throw new InvalidRequest("Need to set either data or file");
 
         if(exceptionHandler != null) callbacks = extendCallbacksWithHandler(callbacks);
-        if(data != null) {
+        if(file == null) {
             requestDataAsync(requestId, url, data, tokens, (Network.NetworkCallbacks<String>)callbacks, verb);
         } else {
-            if(VERB_GET.equals(verb)) {
-                requestFileAsync(requestId, url, null, file, tokens, (Network.NetworkCallbacks<File>)callbacks, verb);
+            if(data != null) {
+                requestFileAsync(requestId, url, data, file, tokens, (Network.NetworkCallbacks<File>)callbacks, verb);
             } else {
-                requestFileAsync(requestId, url, file, null, tokens, (Network.NetworkCallbacks<File>)callbacks, verb);
+                sendFileAsync(requestId, url, file, tokens, (Network.NetworkCallbacks<String>)callbacks, verb);
             }
         }
     }
@@ -193,18 +198,18 @@ public class NetworkRequestBuilder<T> {
      *      something with files, could be something else.
      */
     @SuppressWarnings("unchecked")
-    public Network.Response<T> blocking(long timeout, TimeUnit unit)
+    public Network.Response<Receive> blocking(long timeout, TimeUnit unit)
             throws ExecutionException, TimeoutException, IOException {
         if(data == null && file == null) throw new InvalidRequest("Need to set either data or file");
 
-        Network.Response<T> response;
-        if(data != null) {
-            response = (Network.Response<T>)requestDataBlocking(requestId, url, data, tokens, timeout, unit, verb);
+        Network.Response<Receive> response;
+        if(file == null) {
+            response = (Network.Response<Receive>)requestDataBlocking(requestId, url, data, tokens, timeout, unit, verb);
         } else {
-            if(VERB_GET.equals(verb)) {
-                response = (Network.Response<T>)requestFileBlocking(requestId, url, null, file, tokens, timeout, unit, verb);
+            if(data != null) {
+                response = (Network.Response<Receive>)requestFileBlocking(requestId, url, data, file, tokens, timeout, unit, verb);
             } else {
-                response = (Network.Response<T>)requestFileBlocking(requestId, url, file, null, tokens, timeout, unit, verb);
+                response = (Network.Response<Receive>)sendFileBlocking(requestId, url, file, tokens, timeout, unit, verb);
             }
         }
 
@@ -214,10 +219,10 @@ public class NetworkRequestBuilder<T> {
         return response;
     }
 
-    private Network.NetworkCallbacks<T> extendCallbacksWithHandler(final Network.NetworkCallbacks<T> callbacks) {
-        return new Network.NetworkCallbacks<T>() {
+    private Network.NetworkCallbacks<Receive> extendCallbacksWithHandler(final Network.NetworkCallbacks<Receive> callbacks) {
+        return new Network.NetworkCallbacks<Receive>() {
             @Override
-            public void onRequestCompleted(int id, Network.Response<T> response) {
+            public void onRequestCompleted(int id, Network.Response<Receive> response) {
                 if(response.isError()) {
                     response = response.handleErrorCode(exceptionHandler);
                 }
@@ -231,10 +236,10 @@ public class NetworkRequestBuilder<T> {
         };
     }
 
-    private Future<Network.Response<T>> getExceptionHandlerTask(final Network.Response<T> response) {
-        return executeOn.submit(new Callable<Network.Response<T>>() {
+    private Future<Network.Response<Receive>> getExceptionHandlerTask(final Network.Response<Receive> response) {
+        return executeOn.submit(new Callable<Network.Response<Receive>>() {
             @Override
-            public Network.Response<T> call() throws Exception {
+            public Network.Response<Receive> call() {
                 return response.handleErrorCode(exceptionHandler);
             }
         });
@@ -245,9 +250,13 @@ public class NetworkRequestBuilder<T> {
         executeOn.submit(new Network.StringRequest(requestId, url, tokens, data, verb, callback));
     }
 
-    private void requestFileAsync(int requestId, URL url, File data, File saveTo, AuthTokenManager tokens,
-                                         Network.NetworkCallbacks<File> callbacks, String verb) {
-        executeOn.submit(new Network.FileRequest(requestId, url, tokens, data, verb, callbacks, saveTo));
+    private void sendFileAsync(int requestId, URL url, File data,  AuthTokenManager tokens,
+                                         Network.NetworkCallbacks<String> callbacks, String verb) {
+        executeOn.submit(new Network.FileStringRequest(requestId, url, tokens, data, verb, callbacks));
+    }
+    private void requestFileAsync(int requestId, URL url, Map<String, String> data, File saveTo, AuthTokenManager tokens,
+                                  Network.NetworkCallbacks<File> callbacks, String verb) {
+        executeOn.submit(new Network.StringFileRequest(requestId, url, tokens, data, saveTo, verb, callbacks));
     }
 
     //this also does request on executor (i.e. on background thread); HOWEVER it returns value after the timeout has passed, if it's done
@@ -262,13 +271,20 @@ public class NetworkRequestBuilder<T> {
         return getTaskResult(task, timeout, unit);
     }
 
-    private Network.Response<File> requestFileBlocking(int requestId, URL url, File send, File saveTo,
+    private Network.Response<File> requestFileBlocking(int requestId, URL url, Map<String, String> send, File saveTo,
                                                                 AuthTokenManager tokens, long timeout,
                                                                 TimeUnit unit, String verb)
             throws ExecutionException, TimeoutException, IOException {
-        Future<Network.Response<File>> task = executeOn.submit(new Network.FileRequest(requestId, url,
-                                                                                      tokens, send, verb,
-                                                                                       null, saveTo));
+        Future<Network.Response<File>> task = executeOn
+                .submit(new Network.StringFileRequest(requestId, url, tokens, send, saveTo, verb, null));
+        return getTaskResult(task, timeout, unit);
+    }
+
+    private Network.Response<String> sendFileBlocking(int requestId, URL url, File send, AuthTokenManager tokens,
+                                                      long timeout, TimeUnit unit, String verb)
+            throws ExecutionException, TimeoutException, IOException {
+        Future<Network.Response<String>> task = executeOn
+                .submit(new Network.FileStringRequest(requestId, url, tokens, send, verb, null));
         return getTaskResult(task, timeout, unit);
     }
 
