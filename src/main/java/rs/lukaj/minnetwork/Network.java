@@ -238,7 +238,6 @@ public class Network {
                     }
                     reader.close();
                     errorReader.close();
-                    conn.disconnect();
                     final Response<Receive> response = new Response<>(this,
                                                                 responseCode,
                                                                 null, //no response body, error
@@ -255,7 +254,6 @@ public class Network {
                                                                 getData(Utils.wrapStream(encoding, conn.getInputStream())),
                                                                 null,
                                                                 tokens); //no error message, everything's ok
-                    conn.disconnect();
                     if (callback != null) {
                         callback.onRequestCompleted(requestId, response);
                     }
@@ -268,6 +266,8 @@ public class Network {
                 } else {
                     throw ex;
                 }
+            } finally {
+                conn.disconnect();
             }
         }
 
