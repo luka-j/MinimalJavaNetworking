@@ -20,7 +20,6 @@ package rs.lukaj.minnetwork;
 
 import java.io.*;
 import java.net.*;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
@@ -230,18 +229,20 @@ public class Network {
 
                 int responseCode = conn.getResponseCode();
                 if (Response.isError(responseCode)) {
-                    char[] errorMsg = new char[512];
-                    Arrays.fill(errorMsg, '\0');
                     Reader errorReader = new InputStreamReader(conn.getErrorStream());
-                    errorReader.read(errorMsg);
+                    BufferedReader reader = new BufferedReader(errorReader);
+                    String line;
+                    StringBuilder errorMsg = new StringBuilder();
+                    while((line = reader.readLine()) != null) {
+                        errorMsg.append(line).append('\n');
+                    }
+                    reader.close();
                     errorReader.close();
                     conn.disconnect();
-                    int end = 0;
-                    while (end < 256 && errorMsg[end] != '\0') end++;
                     final Response<Receive> response = new Response<>(this,
                                                                 responseCode,
                                                                 null, //no response body, error
-                                                                String.valueOf(errorMsg).substring(0, end),
+                                                                errorMsg.toString(),
                                                                 tokens);
                     if (callback != null) {
                         callback.onRequestCompleted(requestId, response);
