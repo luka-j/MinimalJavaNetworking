@@ -383,8 +383,10 @@ public class Network {
 
         @Override
         protected void uploadData(URLConnection conn) throws IOException {
-            StringBuilder urlParams = dataToString(data);
-            sendString(urlParams.toString(), conn);
+            if(!super.httpVerb.equalsIgnoreCase("get")) {
+                StringBuilder urlParams = dataToString(data);
+                sendString(urlParams.toString(), conn);
+            }
         }
     }
 
@@ -413,8 +415,10 @@ public class Network {
 
         @Override
         protected void uploadData(URLConnection conn) throws IOException {
-            StringBuilder urlParams = dataToString(data);
-            sendString(urlParams.toString(), conn);
+            if(!super.httpVerb.equalsIgnoreCase("get")) {
+                StringBuilder urlParams = dataToString(data);
+                sendString(urlParams.toString(), conn);
+            }
         }
     }
 
